@@ -1,0 +1,9 @@
+# build
+flit
+
+# modules
+regex
+
+# for testing
+pytest
+pytest-cov
