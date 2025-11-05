@@ -8,51 +8,94 @@ class _context_type(Enum) :
     FORMATTER = auto()
     DIRECTIVE = auto()
 
-@dataclass
-class _context:
-    name : str
-    buffer : str
-    tbel : bool
-    ctype : _context_type
-    terminate : str
-    handler : Callable[[str],str] | None
-
-    def add_to_buffer(self, line):
-        #if self.buffer:
-        #    self.buffer += ' '
-        self.buffer += line
 
 @dataclass
 class Formatter:
     name : str
     handler : Callable[[str],str]
     needs_space : bool
-    starter : str
-    terminator : str
+    allows_nesting : bool
+    starter : str 
+    terminator : str 
+    tbel : bool = True
+
+    def start_re(self) -> str :
+        retval = re.escape(self.starter)
+        if self.needs_space:
+            retval = r'(?<=\s|^)' + retval
+        else :
+            # make sure there isn't a blackslash preceeding the starter
+            retval = r'(?<!\\)' + retval
+        return retval
+    
+    def end_re(self) -> str :
+        retval = re.escape(self.terminator)
+        if self.needs_space:
+            retval = r'(?=\s|$)' + retval
+        else :
+            # make sure there isn't a blackslash preceeding the terminator
+            retval = r'(?<!\\)' + retval
+        return retval
 
 Formatters : list[Formatter] = [
     Formatter(
         name='bold',
         handler = lambda x: f'<strong>{x}</strong>',
-        needs_space = True,
+        needs_space = False,
+        allows_nesting = True,
         starter = '**',
         terminator = '**'
     ),
     Formatter(
         name='italic',
         handler = lambda x: f'<em>{x}</em>',
-        needs_space = True,
+        needs_space = False,
+        allows_nesting = True,
         starter = '~~',
         terminator = '~~'
     ),
     Formatter(
         name='code',
         handler = lambda x: f'<code>{x}</code>',
-        needs_space = True,
+        needs_space = False,
+        allows_nesting = False,
         starter = '``',
         terminator = '``'
     )
 ]
+
+def __null_handler(x):
+    raise Exception(f"Null formatter: {x}")
+
+NULLFORMATTER = Formatter(
+    name='null',
+    handler = __null_handler,
+    needs_space = False,
+    allows_nesting = False,
+    starter = '',
+    terminator = ''
+)
+
+PARA_FORMATTER = Formatter(
+    name='paragraph',
+    handler = lambda x: f'<p>{x}</p>',
+    needs_space = False,
+    allows_nesting = True,
+    starter = '',
+    terminator = ''
+)
+
+@dataclass
+class _context:
+    name : str
+    buffer : str
+    ctype : _context_type
+    fmt : Formatter
+
+    def add_to_buffer(self, line):
+        self.buffer += line
+    
+
 
 class LineSrc:
     def __init__(self, input : str | Path):
@@ -71,9 +114,11 @@ class LineSrc:
         self.index += 1
         return self.data[self.index - 1] + ' '
 
+######################################################################
+# STMCOnverter
+######################################################################
 class STMConverter:
     def __init__(self):
-        self.new_para = True
         self.stack : list[_context] = []
         self.output = ''
 
@@ -83,33 +128,43 @@ class STMConverter:
     def handleFormatters(self, line) :
 
         print(f"-- Input: {line}")
+        count = 0
 
         while(len(line) > 0):
+            count += 1
+            #print(f"-- Count: {count} stack: {len(self.stack)}")
+            if count > 100 :
+                raise Exception("Infinite loop")
+            
             in_progress = [c.name for c in self.stack if c.ctype == _context_type.FORMATTER]
-            terminated = {c.terminate : [f for f in Formatters if f.name == c.name][0] for c in self.stack if c.ctype == _context_type.FORMATTER}
+            terminated = {c.fmt.terminator : c.fmt for c in self.stack if c.ctype == _context_type.FORMATTER}
             possible = {f.starter : f for f in Formatters if f.name not in in_progress}
 
+            #print(f"-- In progress: {in_progress}")
+            #print(f"-- Possible: {possible}")
+            #print(f"-- Terminated: {terminated}")
+
             regexes = []
-            for starter, formatter in possible.items():
-                r = re.escape(starter)
-                if formatter.needs_space:
-                    r = r'(?<=\s|^)' + r
-                regexes.append(f"(?:{r})")
+            
+            ctx = self._inner_context()
+            #print(f"-- Context: {ctx}")
+            if ctx.ctype == _context_type.DIRECTIVE or ctx.fmt.allows_nesting:
+                #print(" -- Nesting is allowed")
+                for starter, formatter in possible.items():
+                    r = formatter.start_re()
+                    regexes.append(f"(?:{r})")
 
             for ender, formatter in terminated.items():
-                r = re.escape(ender)
-                if formatter.needs_space:
-                    r += r'(?=\s|$)'
+                r = formatter.end_re()
                 regexes.append(f"({r})")
 
             regex_string = '|'.join(regexes)
-            print(f"-- Regex: {regex_string}")
+            #print(f"-- Regex: {regex_string}")
             
             final_regex = re.compile(regex_string)
 
             m = final_regex.search(line)
             if m:
-                retval = True
                 print(f"-- Match: {m.group(0)}")
                 preamble = line[:m.start()]
                 line = line[m.end():]
@@ -119,11 +174,11 @@ class STMConverter:
                     self.stack.append(self._format_context(possible[m.group(0)]))
                 elif m.group(0) in terminated:
                     while True :
-                        if self._inner_context().ctype != _context_type.FORMATTER:
+                        if not self._in_context() or self._inner_context().ctype != _context_type.FORMATTER:
                             break
                         context = self.stack.pop()
                         if context.name != terminated[m.group(0)].name:
-                            self._inner_context().add_to_buffer(context.buffer)
+                            self._inner_context().add_to_buffer(context.fmt.terminator + context.buffer)
                         else:
                             self._close(context)
                             break
@@ -143,7 +198,7 @@ class STMConverter:
     def _close(self, context : _context):
         """Assumes _context has already been popped from the stack"""
 
-        handler = context.handler if context.handler else lambda x: x
+        handler = context.fmt.handler
         output = handler(context.buffer.rstrip())
         if self.stack:
             self._inner_context().add_to_buffer(output)
@@ -152,8 +207,8 @@ class STMConverter:
 
     def _blankline(self):
         while self.stack:
-            if self.stack[-1].tbel:
-               self._close( self.stack.pop())
+            if self._inner_context().fmt.tbel:
+               self._close(self.stack.pop())
             else:
                 break
 
@@ -161,14 +216,15 @@ class STMConverter:
         return len(self.stack) > 0
     
     def _para_context(self) -> _context:
-        return _context(name='para', buffer='', tbel=True, 
+        return _context(name='para', buffer='', 
                         ctype=_context_type.DIRECTIVE, 
-                        terminate='', handler=lambda x: f"<p>{x}</p>")
+                        fmt=PARA_FORMATTER, 
+                        )
     
     def _format_context(self, formatter : Formatter) -> _context:
-        return _context(name=formatter.name, buffer='', tbel=True, 
-                        ctype=_context_type.FORMATTER, 
-                        terminate=formatter.terminator, handler=formatter.handler)
+        return _context(name=formatter.name, buffer='',
+                        ctype=_context_type.FORMATTER, fmt=formatter,
+                        )
 
     def convert(self, input : str | Path):
 
