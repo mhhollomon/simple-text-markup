@@ -37,3 +37,6 @@ def test_no_nesting_in_code():
     assert STMConverter().convert("test ``code ~~italic~~ code`` test") == "<p>test <code>code ~~italic~~ code</code> test</p>"
     assert STMConverter().convert("test ``code **bold** code`` test") == "<p>test <code>code **bold** code</code> test</p>"
     assert STMConverter().convert("test ``code **bold ~~italic~~ bold** code`` test") == "<p>test <code>code **bold ~~italic~~ bold** code</code> test</p>"
+
+def test_link_formatter():
+    assert STMConverter().convert("test [link](https://example.com) test") == "<p>test <a href=\"https://example.com\">link</a> test</p>"
