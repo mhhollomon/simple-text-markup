@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List, TextIO
 import regex as re
 
 from .impl_ import *
@@ -139,7 +140,7 @@ class STMConverter:
                         fmt=PARA_FORMATTER, opener=''
                         )
         
-    def convert(self, input : str | Path):
+    def convert(self, input : str | Path | TextIO | List[str]) -> str:
 
         src = LineSrc(input)
 
