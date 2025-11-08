@@ -9,9 +9,10 @@ from .impl_ import *
 # STMCOnverter
 ######################################################################
 class STMConverter:
-    def __init__(self):
+    def __init__(self, src : LineSrc):
         self.stack : list[Context] = []
         self.output = ''
+        self.src = src
 
     def _inner_context(self) -> Context:
         return self.stack[-1]
@@ -31,7 +32,7 @@ class STMConverter:
 
     def _pop_context(self) -> Context:
         return self.stack.pop()
-    
+
     def _add_output(self, line : str):
         if self._in_context():
             self._inner_context().add_to_buffer(line)
@@ -48,7 +49,7 @@ class STMConverter:
             print(f"-- Count: {count} stack: {len(self.stack)}")
             if count > 100 :
                 raise Exception("Infinite loop")
-            
+
             # Nesting is controlled by the group name.
             # Only one formatter of a group can be active.
             in_progress = [c.fmt.group for c in self.stack if c.ctype == context_type.FORMATTER]
@@ -61,7 +62,7 @@ class STMConverter:
             print(f"-- Terminated: {terminated}")
 
             regexes = []
-            
+
             ctx = self._inner_context()
             #print(f"-- Context: {ctx}")
             if ctx.ctype == context_type.DIRECTIVE or ctx.fmt.allows_nesting:
@@ -76,7 +77,7 @@ class STMConverter:
 
             regex_string = '|'.join(regexes)
             print(f"-- Regex: {regex_string}")
-            
+
             final_regex = re.compile(regex_string)
 
             m = final_regex.search(line)
@@ -115,12 +116,12 @@ class STMConverter:
             self._inner_context().add_to_buffer(line)
             # short circuit - no need to continue looking
             return
-        
+
         return
-    
+
     def handleDirectives(self, line) -> bool:
         return False
-    
+
     def _close(self, ctx : Context):
         """Assumes ctx has already been popped from the stack"""
 
@@ -135,28 +136,31 @@ class STMConverter:
                 break
 
     def _para_context(self) -> Context:
-        return Context(name='para', buffer='', 
-                        ctype=context_type.DIRECTIVE, 
+        return Context(name='para', buffer='',
+                        ctype=context_type.DIRECTIVE,
                         fmt=PARA_FORMATTER, opener=''
                         )
-        
-    def convert(self, input : str | Path | TextIO | List[str]) -> str:
 
-        src = LineSrc(input)
+    def convert(self) -> str:
 
-        for line in src:
+        if self.src is None:
+            raise Exception("No input")
+
+        line = self.src.get_next()
+        while (line is not None):
             if (line.strip() == ''):
                 self._blankline()
-                continue
             else :
                 if not self._in_context():
                     if self.handleDirectives(line) :
+                        line = self.src.get_next()
                         continue
                     else :
                         self._push_context(self._para_context())
-
                 self.handleFormatters(line)
-                
+
+            line = self.src.get_next()
+
         while self._in_context():
             self._close(self._pop_context())
 
