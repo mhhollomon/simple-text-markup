@@ -56,3 +56,15 @@ Standard Markdown Link
 
 Unlike the others, this may not stretch over multiple lines.
 Also, there may not be a space between the closing bracket and opening parenthesis.
+
+## Building
+
+```bash
+$ python -m venv .venv
+$ . .venv/bin/activate
+$ pip install -r requirements.txt
+$ flit build
+
+# It can be installed locally via pip
+$ pip install ${path to repo}/dist/simpletextmarkup-0.1.0-py2.py3-none-any.whl
+```
