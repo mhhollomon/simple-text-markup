@@ -1,20 +1,27 @@
 from dataclasses import dataclass
+from enum import Enum, auto
 from typing import Callable
 import regex as re
 
+
+class FormatterType(Enum):
+    EMBEDDED = auto()
+    ONELINE  = auto()
+    BLOCK    = auto()
 
 @dataclass
 class Formatter:
     name : str
     group : str
     tag : str
-    starter : str 
+    starter : str
     needs_space : bool = False
     allows_nesting : bool = True
     terminator : str = ''
     tbel : bool = True
     handler : Callable[[str, str],str] | None = None
     one_shot : bool = False
+    ftype : FormatterType = FormatterType.EMBEDDED
 
     def start_re(self) -> str :
         retval = re.escape(self.starter)
@@ -24,7 +31,7 @@ class Formatter:
             # make sure there isn't a blackslash preceeding the starter
             retval = r'(?<!\\)' + retval
         return retval
-    
+
     def end_re(self) -> str :
         retval = re.escape(self.terminator)
         if self.needs_space:
@@ -33,7 +40,7 @@ class Formatter:
             # make sure there isn't a blackslash preceeding the terminator
             retval = r'(?<!\\)' + retval
         return retval
-    
+
     def build_output(self, input : str, opener : str ) -> str:
         if self.handler is not None:
             return self.handler(input, opener)
@@ -56,12 +63,12 @@ class ClassNameFormatter(Formatter):
 
         class_name = opener[opener.find('=')+1 : -1]
         return f"<{self.tag}{class_string}>{input}</{self.tag}>"
-    
+
     def start_re(self) -> str:
         """Need the special characters to be special"""
 
         return f"\\$<{self.starter}(=[^:]*)?:"
-    
+
 class LinkFormatter(Formatter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -77,7 +84,7 @@ class LinkFormatter(Formatter):
             title = opener[1:-1]
         href = opener[title_index+2:-1]
         return f"<a href=\"{href}\">{title}</a>"
-    
+
     def start_re(self) -> str:
         return r"\[[^\]]+\]\([^)]+\)"
 
@@ -156,10 +163,20 @@ NULLFORMATTER = Formatter(
 )
 
 PARA_FORMATTER = Formatter(
-    name='paragraph',
+    name ='paragraph',
     group = 'para',
     tag = 'p',
     allows_nesting = True,
-    starter = ''
+    starter = '',
+    ftype = FormatterType.BLOCK
+)
+
+NOOP_FORMATTER = Formatter(
+    name ='noop',
+    group = 'noop',
+    tag = 'noop',
+    allows_nesting = True,
+    starter = '',
+    ftype = FormatterType.BLOCK
 )
 

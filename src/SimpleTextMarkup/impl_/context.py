@@ -2,18 +2,14 @@
 from enum import Enum, auto
 from dataclasses import dataclass
 
-from .formatter import Formatter
-
-class context_type(Enum) :
-    FORMATTER = auto()
-    DIRECTIVE = auto()
+from .formatter import Formatter, FormatterType
 
 
 @dataclass
 class Context:
     name : str
     buffer : str
-    ctype : context_type
+    ftype : FormatterType
     fmt : Formatter
     opener : str
 
@@ -22,9 +18,12 @@ class Context:
 
     @staticmethod
     def from_formatter(formatter : Formatter, opener : str) -> 'Context':
-        return Context(name=formatter.name, buffer='',
-                        ctype=context_type.FORMATTER, 
-                        fmt=formatter, opener=opener
-                        )
-    
+        return Context(
+            fmt=formatter,
+            name=formatter.name,
+            ftype=formatter.ftype,
+            buffer='',
+            opener=opener
+        )
+
 

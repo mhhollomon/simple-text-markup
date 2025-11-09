@@ -1,8 +1,5 @@
-from pathlib import Path
-from typing import List, TextIO
-import regex as re
-
 from .impl_ import *
+import regex as re
 
 
 ######################################################################
@@ -39,7 +36,10 @@ class STMConverter:
         else:
             self.output += line
 
-    def handleFormatters(self, line) :
+    def parseInlineFormatters(self) -> bool:
+        line = self.src.get_next()
+        if line is None:
+            return False
 
         print(f"-- Input: {line}")
         count = 0
@@ -52,9 +52,9 @@ class STMConverter:
 
             # Nesting is controlled by the group name.
             # Only one formatter of a group can be active.
-            in_progress = [c.fmt.group for c in self.stack if c.ctype == context_type.FORMATTER]
+            in_progress = [c.fmt.group for c in self.stack if c.ftype == FormatterType.EMBEDDED]
             # Reversed to make sure the inner most contexts are first in the list
-            terminated = {c.name : c.fmt for c in reversed(self.stack) if c.ctype == context_type.FORMATTER}
+            terminated = {c.name : c.fmt for c in reversed(self.stack) if c.ftype == FormatterType.EMBEDDED}
             possible = {f.name : f for f in Formatters if f.group not in in_progress}
 
             print(f"-- In progress: {in_progress}")
@@ -65,7 +65,7 @@ class STMConverter:
 
             ctx = self._inner_context()
             #print(f"-- Context: {ctx}")
-            if ctx.ctype == context_type.DIRECTIVE or ctx.fmt.allows_nesting:
+            if ctx.ftype == FormatterType.BLOCK or ctx.fmt.allows_nesting:
                 #print(" -- Nesting is allowed")
                 for starter, formatter in possible.items():
                     r = formatter.start_re()
@@ -101,7 +101,7 @@ class STMConverter:
 
                 elif matching_formatter in terminated:
                     while True :
-                        if not self._in_context() or self._inner_context().ctype != context_type.FORMATTER:
+                        if not self._in_context() or self._inner_context().ftype != FormatterType.EMBEDDED:
                             break
                         context = self._pop_context()
                         if context.name != matching_formatter:
@@ -115,12 +115,35 @@ class STMConverter:
             print(f"-- No match: {line}")
             self._inner_context().add_to_buffer(line)
             # short circuit - no need to continue looking
-            return
+            return True
 
-        return
+        return True
 
-    def handleDirectives(self, line) -> bool:
+    def parseConfigs(self) -> bool:
+        line = self.src.get_next()
+        while (line is not None and line.strip() == ''):
+            line = self.src.get_next()
+        if line is None:
+            return False
+
+        # for now, just ignore configs
+        self.src.push_back(line)
         return False
+
+    def parseBlock(self) -> bool:
+        line = self.src.get_next()
+        while (line is not None and line.strip() == ''):
+            line = self.src.get_next()
+        if line is None:
+            return False
+
+        self.src.push_back(line)
+        self._push_context(self._para_context())
+
+        while not self.src.is_blank():
+            self.parseInlineFormatters()
+
+        return True
 
     def _close(self, ctx : Context):
         """Assumes ctx has already been popped from the stack"""
@@ -136,30 +159,28 @@ class STMConverter:
                 break
 
     def _para_context(self) -> Context:
-        return Context(name='para', buffer='',
-                        ctype=context_type.DIRECTIVE,
-                        fmt=PARA_FORMATTER, opener=''
-                        )
+        return Context(
+            fmt=PARA_FORMATTER,
+            name=PARA_FORMATTER.name,
+            ftype=PARA_FORMATTER.ftype,
+            buffer='',
+            opener=''
+        )
 
     def convert(self) -> str:
 
         if self.src is None:
             raise Exception("No input")
 
-        line = self.src.get_next()
-        while (line is not None):
-            if (line.strip() == ''):
-                self._blankline()
-            else :
-                if not self._in_context():
-                    if self.handleDirectives(line) :
-                        line = self.src.get_next()
-                        continue
-                    else :
-                        self._push_context(self._para_context())
-                self.handleFormatters(line)
 
-            line = self.src.get_next()
+        while (not self.src.is_at_end()):
+            while self.parseConfigs() :
+                pass
+
+            if self.parseBlock():
+                self._blankline()
+                continue
+
 
         while self._in_context():
             self._close(self._pop_context())
