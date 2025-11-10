@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Callable
 import regex as re
 
 
@@ -33,7 +32,8 @@ class FormatterBase:
 
 @dataclass
 class EmbedFormatter(FormatterBase):
-    def __init__(self, name : str, group : str, tag : str, starter : str,
+    def __init__(self,
+                 name : str, group : str, tag : str, starter : str,
                  terminator : str = '', allows_nesting : bool = True,
                  one_shot : bool = False):
         super().__init__(name, group, FormatterType.EMBEDDED)
@@ -66,9 +66,11 @@ class EmbedFormatter(FormatterBase):
         return f"<{self.tag}>{input}</{self.tag}>"
 
 class ClassNameFormatter(EmbedFormatter):
-    def __init__(self, name : str, group : str, tag : str, starter : str, allows_nesting : bool = True, one_shot : bool = False):
+    def __init__(self,
+                 name : str, group : str, tag : str,
+                 starter : str, allows_nesting : bool = True,
+                 one_shot : bool = False):
         super().__init__(name, group, tag, starter, '>', allows_nesting, one_shot)
-        self.terminator = '>'
 
     def build_output(self, input : str, opener : str) -> str:
         class_string = ''
@@ -161,8 +163,9 @@ def get_formatters() -> list[FormatterBase]:
             starter = '[',
         ),
         HorizontalRuleFormatterClass(),
-        HorizontalRuleFormatterClass(name = 'hr_class', use_class=True),
+        HorizontalRuleFormatterClass(name = 'hr_class', directive=True),
         HeaderFormatterClass(),
+        HeaderFormatterClass(name = 'header_class', directive=True),
     ]
 
 
@@ -195,43 +198,58 @@ NOOP_FORMATTER = BlockFormatter(
 ##### Line Formatters
 
 class OneLineFormatter(FormatterBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(name=kwargs['name'], group=kwargs['group'], ftype=FormatterType.ONELINE)
+    def __init__(self, name : str, group : str):
+        super().__init__(name=name, group=group, ftype=FormatterType.ONELINE)
 
 class HorizontalRuleFormatterClass(OneLineFormatter):
-    def __init__(self, name : str = 'hr', use_class : bool = False):
+    def __init__(self, name : str = 'hr', directive : bool = False):
         super().__init__(
             name = name,
-            group = 'hr',
-            ftype = FormatterType.ONELINE,
-            starter = '---'
+            group = 'hr'
         )
-        self.use_class = use_class
+        self.directive = directive
 
     def start_re(self) -> str:
-        if self.use_class:
+        if self.directive:
             return r'^\:hr(=[^\s]*)?(?:\s|$)'
         else :
             return r'^-{3,}(?:\s|$)'
 
     def build_output(self, input: str, opener: str) -> str:
-        if self.use_class:
-            return f'<hr class=\"{opener[opener.find('=')+1 : -1]}\">'
+        index = opener.find('=')
+        if index != -1:
+            class_name = f' class="{opener[index+1 : -1]}"'
+        else :
+            class_name = ''
+        if self.directive:
+            return f'<hr{class_name}>'
         return '<hr>'
 
 class HeaderFormatterClass(OneLineFormatter):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, name : str = 'header', directive : bool = False):
         super().__init__(
-            name='header',
-            group = 'header',
-            ftype = FormatterType.ONELINE
+            name = name,
+            group = 'header'
         )
+        self.directive = directive
 
     def start_re(self) -> str:
-        return r'^#{1,6}(?:\s)'
+        if self.directive:
+            return r'^\:h[123456](=[^\s]*)?(?:\s|$)'
+        else :
+            return r'^#{1,6}(?:\s)'
 
     def build_output(self, input: str, opener: str) -> str:
-        level = opener.count('#')
         input = input.strip()
-        return f'<h{level}>{input}</h{level}>'
+        if self.directive:
+            level = opener[2]
+            index = opener.find('=')
+            if index != -1:
+                class_name = f' class="{opener[index+1 : -1]}"'
+            else :
+                class_name = ''
+            return f'<h{level}{class_name}>{input}</h{level}>'
+        else :
+            level = opener.count('#')
+            return f'<h{level}>{input}</h{level}>'
 
