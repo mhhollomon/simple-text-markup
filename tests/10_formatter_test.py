@@ -40,3 +40,6 @@ def test_no_nesting_in_code():
 
 def test_link_formatter():
     assert stm_convert("test [link](https://example.com) test") == "<p>test <a href=\"https://example.com\">link</a> test</p>"
+
+def test_format_over_two_lines():
+    assert stm_convert("test **bold ~~italic~~\nmore text**") == "<p>test <strong>bold <em>italic</em> more text</strong></p>"

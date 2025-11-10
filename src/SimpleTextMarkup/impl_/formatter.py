@@ -5,55 +5,72 @@ import regex as re
 
 
 class FormatterType(Enum):
+    UNKNOWN  = auto()
     EMBEDDED = auto()
     ONELINE  = auto()
     BLOCK    = auto()
 
+class FormatterBase:
+    def __init__(self, name : str, group : str, ftype : FormatterType) -> None:
+        self.name = name
+        self.group = group
+        self.ftype = ftype
+
+    def start_re(self) -> str:
+        raise NotImplementedError
+
+    def end_re(self) -> str:
+        raise NotImplementedError
+
+    def build_output(self, input : str, opener : str) -> str:
+        raise NotImplementedError
+
+    def nestable(self) -> bool:
+        raise NotImplementedError
+
+    def self_closing(self) -> bool:
+        raise NotImplementedError
+
 @dataclass
-class Formatter:
-    name : str
-    group : str
-    tag : str
-    starter : str
-    needs_space : bool = False
-    allows_nesting : bool = True
-    terminator : str = ''
-    tbel : bool = True
-    handler : Callable[[str, str],str] | None = None
-    one_shot : bool = False
-    ftype : FormatterType = FormatterType.EMBEDDED
+class EmbedFormatter(FormatterBase):
+    def __init__(self, name : str, group : str, tag : str, starter : str,
+                 terminator : str = '', allows_nesting : bool = True,
+                 one_shot : bool = False):
+        super().__init__(name, group, FormatterType.EMBEDDED)
+        self.tag = tag
+        self.starter = starter
+        self.terminator = terminator
+        self.allows_nesting = allows_nesting
+        self.one_shot = one_shot
+
+
+    def nestable(self) -> bool:
+        return self.allows_nesting
+
+    def self_closing(self) -> bool:
+        return self.one_shot
 
     def start_re(self) -> str :
         retval = re.escape(self.starter)
-        if self.needs_space:
-            retval = r'(?<=\s|^)' + retval
-        else :
-            # make sure there isn't a blackslash preceeding the starter
-            retval = r'(?<!\\)' + retval
+        # make sure there isn't a blackslash preceeding the starter
+        retval = r'(?<!\\)' + retval
         return retval
 
     def end_re(self) -> str :
         retval = re.escape(self.terminator)
-        if self.needs_space:
-            retval = r'(?=\s|$)' + retval
-        else :
-            # make sure there isn't a blackslash preceeding the terminator
-            retval = r'(?<!\\)' + retval
+        # make sure there isn't a blackslash preceeding the terminator
+        retval = r'(?<!\\)' + retval
         return retval
 
     def build_output(self, input : str, opener : str ) -> str:
-        if self.handler is not None:
-            return self.handler(input, opener)
-        else:
-            return f"<{self.tag}>{input}</{self.tag}>"
+        return f"<{self.tag}>{input}</{self.tag}>"
 
-class ClassNameFormatter(Formatter):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.handler = self._handler
+class ClassNameFormatter(EmbedFormatter):
+    def __init__(self, name : str, group : str, tag : str, starter : str, allows_nesting : bool = True, one_shot : bool = False):
+        super().__init__(name, group, tag, starter, '>', allows_nesting, one_shot)
         self.terminator = '>'
 
-    def _handler(self, input : str, opener : str) -> str:
+    def build_output(self, input : str, opener : str) -> str:
         class_string = ''
         equal = opener.find('=')
         if equal != -1:
@@ -69,14 +86,13 @@ class ClassNameFormatter(Formatter):
 
         return f"\\$<{self.starter}(=[^:]*)?:"
 
-class LinkFormatter(Formatter):
+class LinkFormatter(EmbedFormatter):
     def __init__(self, *args, **kwargs):
+        kwargs['one_shot'] = True
         super().__init__(*args, **kwargs)
-        self.handler = self._handler
-        self.one_shot = True
 
 
-    def _handler(self, _ : str, opener : str) -> str:
+    def build_output(self, _ : str, opener : str) -> str:
         title_index = opener.find(']')
         if title_index != -1:
             title = opener[1:title_index]
@@ -88,95 +104,134 @@ class LinkFormatter(Formatter):
     def start_re(self) -> str:
         return r"\[[^\]]+\]\([^)]+\)"
 
-Formatters : list[Formatter] = [
-    Formatter(
-        name='bold',
-        group = 'bold',
-        tag = 'strong',
-        allows_nesting = True,
-        starter = '**',
-        terminator = '**'
-    ),
-    ClassNameFormatter(
-        name='bold_class',
-        group = 'bold',
-        tag = 'strong',
-        allows_nesting = True,
-        starter = 'b',
-    ),
-    Formatter(
-        name='italic',
-        group = 'italic',
-        tag = 'em',
-        allows_nesting = True,
-        starter = '~~',
-        terminator = '~~'
-    ),
-    ClassNameFormatter(
-        name='italic_class',
-        group = 'italic',
-        tag = 'em',
-        allows_nesting = True,
-        starter = 'i',
-    ),
-    Formatter(
-        name='code',
-        group = 'code',
-        tag = 'code',
-        allows_nesting = False,
-        starter = '``',
-        terminator = '``'
-    ),
-    ClassNameFormatter(
-        name='code_class',
-        group = 'code',
-        tag = 'code',
-        allows_nesting = True,
-        starter = 'code',
-    ),
-    ClassNameFormatter(
-        name='span_class',
-        group = 'span',
-        tag = 'span',
-        allows_nesting = True,
-        starter = 'span',
-    ),
-    LinkFormatter(
-        name='link',
-        group = 'link',
-        tag = 'a',
-        allows_nesting = False,
-        starter = '[',
-    )
-]
+def get_formatters() -> list[FormatterBase]:
+    return [
+        EmbedFormatter(
+            name='bold',
+            group = 'bold',
+            tag = 'strong',
+            starter = '**',
+            terminator = '**'
+        ),
+        ClassNameFormatter(
+            name='bold_class',
+            group = 'bold',
+            tag = 'strong',
+            starter = 'b',
+        ),
+        EmbedFormatter(
+            name='italic',
+            group = 'italic',
+            tag = 'em',
+            starter = '~~',
+            terminator = '~~'
+        ),
+        ClassNameFormatter(
+            name='italic_class',
+            group = 'italic',
+            tag = 'em',
+            starter = 'i',
+        ),
+        EmbedFormatter(
+            name='code',
+            group = 'code',
+            tag = 'code',
+            allows_nesting = False,
+            starter = '``',
+            terminator = '``'
+        ),
+        ClassNameFormatter(
+            name='code_class',
+            group = 'code',
+            tag = 'code',
+            allows_nesting = False,
+            starter = 'code',
+        ),
+        ClassNameFormatter(
+            name='span_class',
+            group = 'span',
+            tag = 'span',
+            starter = 'span',
+        ),
+        LinkFormatter(
+            name='link',
+            group = 'link',
+            tag = 'a',
+            allows_nesting = False,
+            starter = '[',
+        ),
+        HorizontalRuleFormatterClass(),
+        HorizontalRuleFormatterClass(name = 'hr_class', use_class=True),
+        HeaderFormatterClass(),
+    ]
 
-def __null_handler(x, y):
-    raise Exception(f"Null formatter: {x}, {y}")
 
-NULLFORMATTER = Formatter(
+class BlockFormatter(FormatterBase):
+    def __init__(self, name : str, group : str, tag : str):
+        super().__init__(name, group, FormatterType.BLOCK)
+        self.tag = tag
+
+    def build_output(self, input : str, opener : str) -> str:
+        return f"<{self.tag}>{input}</{self.tag}>"
+
+NULLFORMATTER = BlockFormatter(
     name='null',
     group = 'null',
-    tag = 'null',
-    handler = __null_handler,
-    allows_nesting = False,
-    starter = ''
+    tag = 'null'
 )
 
-PARA_FORMATTER = Formatter(
+PARA_FORMATTER = BlockFormatter(
     name ='paragraph',
     group = 'para',
-    tag = 'p',
-    allows_nesting = True,
-    starter = '',
-    ftype = FormatterType.BLOCK
+    tag = 'p'
 )
 
-NOOP_FORMATTER = Formatter(
+NOOP_FORMATTER = BlockFormatter(
     name ='noop',
     group = 'noop',
-    tag = 'noop',
-    allows_nesting = True,
-    starter = '',
-    ftype = FormatterType.BLOCK
+    tag = 'noop'
 )
+
+##### Line Formatters
+
+class OneLineFormatter(FormatterBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(name=kwargs['name'], group=kwargs['group'], ftype=FormatterType.ONELINE)
+
+class HorizontalRuleFormatterClass(OneLineFormatter):
+    def __init__(self, name : str = 'hr', use_class : bool = False):
+        super().__init__(
+            name = name,
+            group = 'hr',
+            ftype = FormatterType.ONELINE,
+            starter = '---'
+        )
+        self.use_class = use_class
+
+    def start_re(self) -> str:
+        if self.use_class:
+            return r'^\:hr(=[^\s]*)?(?:\s|$)'
+        else :
+            return r'^-{3,}(?:\s|$)'
+
+    def build_output(self, input: str, opener: str) -> str:
+        if self.use_class:
+            return f'<hr class=\"{opener[opener.find('=')+1 : -1]}\">'
+        return '<hr>'
+
+class HeaderFormatterClass(OneLineFormatter):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            name='header',
+            group = 'header',
+            ftype = FormatterType.ONELINE
+        )
+
+    def start_re(self) -> str:
+        return r'^#{1,6}(?:\s)'
+
+    def build_output(self, input: str, opener: str) -> str:
+        level = opener.count('#')
+        input = input.strip()
+        return f'<h{level}>{input}</h{level}>'
 

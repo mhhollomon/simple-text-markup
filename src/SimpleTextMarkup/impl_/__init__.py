@@ -3,8 +3,8 @@ from .context import *
 from .linesrc import *
 
 __all__ = [
-    'Formatter',
-    'Formatters',
+    'EmbedFormatter',
+    'get_formatters',
     'FormatterType',
     'NOOP_FORMATTER',
     'NULLFORMATTER',
