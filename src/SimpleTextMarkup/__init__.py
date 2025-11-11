@@ -1,4 +1,4 @@
-"""Simple Markup Language for text."""
+"""Simple Markup Language for Text."""
 __version__ = "0.1.0"
 
 from .converter import *

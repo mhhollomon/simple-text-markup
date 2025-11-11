@@ -1,14 +1,17 @@
 from .formatter import *
 from .context import *
 from .linesrc import *
+from .options import *
 
 __all__ = [
-    'EmbedFormatter',
+    'FormatterBase',
     'get_formatters',
     'FormatterType',
-    'NOOP_FORMATTER',
-    'NULLFORMATTER',
-    'PARA_FORMATTER',
+    'ParserProxy',
     'Context',
-    'LineSrc'
+    'LineSrc',
+    'OptionSource',
+    'Option',
+    'BooleanOption',
+    'StringOption'
 ]

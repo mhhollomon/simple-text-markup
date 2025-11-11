@@ -1,12 +1,18 @@
+from typing import Dict
 from .impl_ import *
 import regex as re
 
 
+def default_options() -> Dict[str, Option]:
+    return {
+        'use_classes' : BooleanOption('use_classes', False, OptionSource.DEFAULT),
+    }
+
 ######################################################################
-# STMCOnverter
+# STMConverter
 ######################################################################
-class STMConverter:
-    def __init__(self, src : LineSrc, formatters : list[EmbedFormatter] | None = None):
+class STMConverter(ParserProxy):
+    def __init__(self, src : LineSrc, formatters : list[FormatterBase] | None = None, options : dict[str, str] | None = None):
         self.stack : list[Context] = []
         self.output = ''
         self.src = src
@@ -14,11 +20,29 @@ class STMConverter:
         if formatters is not None:
             self.formatters = formatters
         else:
-            self.formatters = get_formatters()
+            self.formatters = get_formatters(self)
 
         self.embeds = [f for f in self.formatters if f.ftype == FormatterType.EMBEDDED]
         self.oneliners = [f for f in self.formatters if f.ftype == FormatterType.ONELINE]
         self.blocks = [f for f in self.formatters if f.ftype == FormatterType.BLOCK]
+
+        self.options = default_options()
+        if options is not None:
+            for k, v in options.items():
+                if k not in self.options:
+                    raise Exception(f"Unknown option: {k}")
+                self.options[k].set_value(v, OptionSource.CONFIG)
+
+        print(f"--- STMConverter: Options: {self.options}")
+
+
+    #### ParserProxy overrides
+    def get_class_name(self, tag : str) -> str:
+        if not self.options['use_classes'].get_value():
+            return ''
+        if tag == 'span':
+            return ''
+        return f'stm-{tag}'
 
     def _inner_context(self) -> Context:
         return self.stack[-1]
@@ -26,8 +50,8 @@ class STMConverter:
     def _in_context(self) -> bool:
         return len(self.stack) > 0
 
-    def _push_context(self, data : EmbedFormatter | Context, opener : str | None = None) -> Context:
-        if isinstance(data, EmbedFormatter):
+    def _push_context(self, data : FormatterBase | Context, opener : str | None = None) -> Context:
+        if isinstance(data, FormatterBase):
             if opener is None:
                 raise Exception("Context created from Formatter must have an opener")
             ctx = Context.from_formatter(data, opener)
@@ -198,10 +222,11 @@ class STMConverter:
         self._add_output(output)
 
     def _para_context(self) -> Context:
+        para_formatter = [ f for f in self.blocks if f.name == 'paragraph' ][0]
         return Context(
-            fmt=PARA_FORMATTER,
-            name=PARA_FORMATTER.name,
-            ftype=PARA_FORMATTER.ftype,
+            fmt=para_formatter,
+            name=para_formatter.name,
+            ftype=para_formatter.ftype,
             buffer='',
             opener=''
         )
