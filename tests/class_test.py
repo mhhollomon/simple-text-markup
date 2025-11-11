@@ -26,3 +26,8 @@ def test_class_and_normal_nested():
 
 def test_class_nested_in_normal():
     assert stm_convert("test **This is bold. This is $<i=foo: italic too>** test") == "<p>test <strong>This is bold. This is <em class=\"foo\"> italic too</em></strong> test</p>"
+
+def test_extras():
+    assert stm_convert("test $<strike:strike> test") == "<p>test <s>strike</s> test</p>"
+    assert stm_convert("test $<sub:subscript> test") == "<p>test <sub>subscript</sub> test</p>"
+    assert stm_convert("test $<sup:superscript> test") == "<p>test <sup>superscript</sup> test</p>"

@@ -58,6 +58,27 @@ def get_formatters(parser : ParserProxy) -> list[FormatterBase]:
             starter = 'span',
             parser=parser,
         ),
+        ClassNameFormatter(
+            name='strike',
+            group = 'strike',
+            tag = 's',
+            starter = 'strike',
+            parser=parser,
+        ),
+        ClassNameFormatter(
+            name='sub',
+            group = 'sub',
+            tag = 'sub',
+            starter = 'sub',
+            parser=parser,
+        ),
+        ClassNameFormatter(
+            name='sup',
+            group = 'sup',
+            tag = 'sup',
+            starter = 'sup',
+            parser=parser,
+        ),
         LinkFormatter(
             name='link',
             group = 'link',
