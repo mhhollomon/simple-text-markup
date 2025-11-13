@@ -1,0 +1,96 @@
+This is a paragraph.
+It continues until blank line, or a new paragraph is started.
+.{ This starts a new paragraph.
+If you start the paragraph with the start marker, you must end it with the block-end `.}`
+.}
+
+.p{
+This is an equivalent paragraph.
+.}
+
+And actually, so is this.
+
+Of course, *italics*, .i{italics}, **bold**, .b{bold}, `code`, .c{code} .l{This is a link|https://example.com/some/url} all
+work. The inline command style has just the brace as the ender.
+
+.img{This is the alt-text|https://example/cool.jpg}
+
+You can include size information after the url
+.img{text|https://example/cool.jpg 100,200}
+This must be two comma separated integers.
+
+- simple list. Each bullet can only be a line long.
+- Another bullet
+    - sub-bullet
+        - sub-sub-bullet
+    - levels are indented by 4 spaces (no tabs)
+
+Either a blank line or a line without a `dash` to end the list.
+
+More complicated list.
+.ul{
+    - This is a list of stuff. one line thing.
+    .li{
+        Really long thing in a list item.
+        Include a line break.
+    .}
+.}
+Note that, since the `.}` ends the list, this is a separate paragraph.
+.ul{
+    .li{
+        You  can put things before the embedded list.
+        .ul{
+            - List inside list is cool
+        }
+        You can put things after the embedded list.
+    .}
+    .li{
+Indent of the text doesn't matter.
+        - sub list item
+    .}
+    .li{ Indent *may* matter. This is set by the first sub item seen.
+- yes, this is a sub list item as well.
+- but others must be at the same level.
+    - unless you mean to open a sub-sub level.
+    .}
+    .li{ .p{
+        This will wrap the list item text into a `<p>` tag.
+        But you must end the paragraph with the `.}` marker.
+    .} .}
+
+    .li{
+.p{
+This is equivalent to the above.
+.}
+.}
+#{ This is considered a comment until the end of the line.
+.#{ This is a block comment.
+Block terminators must be the first non-blanks on the line.
+.}
+.}
+
+`.ol{` works the same way. And you still use dash (not hash) for the simple starter.
+
+#{ compact table. First row is a header row.
+.table{
+First Column | Second Column
+cell 1 | cell 2
+row 2 cell 1 | row 2 cell 2
+.}
+
+.bq{
+    This is a block quote. Again the indenting isn't
+    necessary but may make things look nicer.
+.}
+
+.hr{}
+---
+
+hr{
+    Yes you can put text here, but it will be ignored.
+.}
+
+=== Heading (level 3)
+.h3{
+    Heading level 3 as a block.
+.}
