@@ -58,7 +58,7 @@ Indent of the text doesn't matter.
         But you must end the paragraph with the `.}` marker.
     .} .}
 
-    .li{
+.li{
 .p{
 This is equivalent to the above.
 .}
@@ -81,16 +81,37 @@ row 2 cell 1 | row 2 cell 2
 .bq{
     This is a block quote. Again the indenting isn't
     necessary but may make things look nicer.
+
+    Since a block quote must be explicitly ended, you
+    can have multiple paragraphs.
 .}
 
 .hr{}
 ---
 
-hr{
-    Yes you can put text here, but it will be ignored.
+=== Heading (level 3)
+
+.h4{Heading (level 4) as an "in-line" style}
+
+.code{
+    Code block.
+    # note that the block has the word spelled out.
+    # The in-line formatter is just .c{}
+
+    # Code block must be explicitly ended.
+    # Code blocks strip an amount of indent
+    # of the first line. It preserves any extra
+        # This will be indented in the output.
 .}
 
-=== Heading (level 3)
-.h3{
-    Heading level 3 as a block.
+This is a footnote .fn{n1}. The `n1` is any alphanumeric string.
+It must be unique among the footnotes. It only serves to
+tie the footnote marker with the text.
+
+.fntext(n1){
+    This is the footnote text. You could even put a
+    .l{a link here|https://example.com/url}
 .}
+
+#{This actual renders the footnote text}
+.footnotes{}
