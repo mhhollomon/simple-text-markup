@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 from .impl_ import *
 import regex as re
 
@@ -16,6 +16,8 @@ class STMConverter(ParserProxy):
         self.stack : list[Context] = []
         self.output = ''
         self.src = src
+
+        self.doc = Document()
 
         self.options = default_options()
         if options is not None:
@@ -90,11 +92,37 @@ class STMConverter(ParserProxy):
 
         return True
 
+    def parseSpans(self, parent : Block, first_line : str, explicit : bool) :
+        line : str | None = first_line
+
+        while True :
+            if line is None :
+                return
+            if explicit and line.startswith('.}') :
+                # throw away the line and return
+                return
+            if not explicit and line.strip() == '' :
+                # throw away the line and return
+                return
+
+            # for now, just wrap the whole line as a span
+            parent.append(Span(line))
+            line = self.src.get_next()
+
     def parseBlock(self) -> bool:
         if not self._skip_blanks_lines() :
             return False
 
         line : str = self.src.get_next() # type: ignore
+
+        m = re.match(r'.p?{ ', line)
+        if m :
+            line = line[len(m.group(0)) : ]
+            line = line.lstrip()
+            block = Block()
+            self.parseSpans(block, line, explicit=True)
+            self.doc.append(block)
+            return True
 
         return False
 
@@ -109,5 +137,10 @@ class STMConverter(ParserProxy):
                 pass
 
             self.parseBlock()
+
+        import json
+        print('--- START ----')
+        print(json.dumps(self.doc.json(), indent=2))
+        print('--- END ------')
 
         return self.output

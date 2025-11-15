@@ -2,6 +2,7 @@ from .formatter import *
 from .context import *
 from .linesrc import *
 from .options import *
+from .ast import *
 
 __all__ = [
     'FormatterBase',
@@ -13,5 +14,6 @@ __all__ = [
     'OptionSource',
     'Option',
     'BooleanOption',
-    'StringOption'
+    'StringOption',
+    'Block', 'Span', 'Document'
 ]
