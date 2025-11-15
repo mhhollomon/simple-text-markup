@@ -1,33 +1,48 @@
 
-from typing import List
+from typing import Dict, List
 
-class Span :
+class Node :
+    ntype : str = 'Node'
+
+    def json(self) -> Dict[str, str] :
+        return { 'ntype' : self.ntype }
+
+class Span(Node) :
+    ntype = 'span'
     def __init__(self, text : str) -> None:
         self.text = text
 
     def json(self) :
-        return { 'ntype' : 'span', 'text' : self.text}
+        return { **(super().json()), 'text' : self.text}
 
-class Block :
-    def __init__(self):
-        self.children : List['Span | Block'] = []
+class Container(Node) :
+    ntype = 'container'
 
-    def append(self, child : 'Span | Block') :
+    def __init__(self) -> None:
+        self.children : List[Node] = []
+
+    def append(self, child : Node) :
         self.children.append(child)
 
     def json(self) :
-        return { 'ntype' : 'block',
+        return { **(super().json()),
                 'children' : [ c.json() for c in self.children]}
 
-class Document :
+
+class Block(Container) :
+    ntype = 'block'
+
+    def __init__(self, tag : str) -> None:
+        super().__init__()
+        self.tag = tag
+
+    def json(self) :
+        return {  **(super().json()),
+                'tag' : self.tag,
+                }
+
+class Document(Container) :
+    ntype = 'document'
+
     def __init__(self):
         self.children : List[Block] = []
-
-    def append(self, child : Block) :
-        self.children.append(child)
-
-    def json(self) :
-        return { 'ntype' : 'document',
-                'children' : [ c.json() for c in self.children]}
-
-

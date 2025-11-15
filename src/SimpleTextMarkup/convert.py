@@ -1,4 +1,6 @@
-from typing import Dict, List
+from typing import Dict
+
+from .renderer import Renderer
 from .impl_ import *
 import regex as re
 
@@ -12,10 +14,16 @@ def default_options() -> Dict[str, Option]:
 # STMConverter
 ######################################################################
 class STMConverter(ParserProxy):
-    def __init__(self, src : LineSrc,  options : dict[str, str] | None = None):
+    def __init__(self, src : LineSrc,  options : dict[str, str] | None = None, renderer : Renderer | None = None):
         self.stack : list[Context] = []
         self.output = ''
         self.src = src
+
+        if renderer is not None:
+            self.renderer = renderer
+        else :
+            from .renderer.html_render import render
+            self.renderer = render
 
         self.doc = Document()
 
@@ -115,19 +123,27 @@ class STMConverter(ParserProxy):
 
         line : str = self.src.get_next() # type: ignore
 
+        # Other block types go here
+
         m = re.match(r'.p?{ ', line)
         if m :
             line = line[len(m.group(0)) : ]
             line = line.lstrip()
-            block = Block()
-            self.parseSpans(block, line, explicit=True)
-            self.doc.append(block)
-            return True
+            if line.strip() == '':
+                line = self.src.get_next() # type: ignore
+            explicit = True
+        else :
+            line = line.lstrip()
+            explicit = False
 
-        return False
+        block = Block(tag='p')
+        self.parseSpans(block, line, explicit=explicit)
+        self.doc.append(block)
+        return True
 
 
-    def convert(self) -> str:
+
+    def parse(self) -> Document:
 
         if self.src is None:
             raise Exception("No input")
@@ -143,4 +159,8 @@ class STMConverter(ParserProxy):
         print(json.dumps(self.doc.json(), indent=2))
         print('--- END ------')
 
-        return self.output
+        return self.doc
+
+    def convert(self) -> str:
+        self.parse()
+        return self.renderer(self.doc)

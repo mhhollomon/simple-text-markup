@@ -33,15 +33,15 @@ class LineSrc:
                 self.at_end = True
                 return None
             elif line[-1] == '\n':
-                return line[:-1] + ' '
+                return line[:-1]
             else :
-                return line + ' '
+                return line
 
         if self.index >= len(self.data):
             self.at_end = True
             return None
         self.index += 1
-        return self.data[self.index - 1] + ' '
+        return self.data[self.index - 1]
 
     def push_back(self, line : str):
         self.at_end = False
