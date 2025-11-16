@@ -6,7 +6,7 @@ def renderBlock(block : Block) :
     first = True
     for c in block.children:
         if c.ntype in HELPERS:
-            if not first :
+            if not first and c.ntype == 'span':
                 output += ' '
             first = False
             output += HELPERS[c.ntype](c)

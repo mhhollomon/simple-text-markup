@@ -100,6 +100,10 @@ class STMConverter(ParserProxy):
 
         return True
 
+    def parseLineSpans(self, parent : Block, line : str) :
+        parent.append(Span(line))
+
+
     def parseSpans(self, parent : Block, first_line : str, explicit : bool) :
         line : str | None = first_line
 
@@ -113,18 +117,69 @@ class STMConverter(ParserProxy):
                 # throw away the line and return
                 return
 
-            # for now, just wrap the whole line as a span
-            parent.append(Span(line))
+            self.parseLineSpans(parent, line)
             line = self.src.get_next()
 
-    def parseBlock(self) -> bool:
-        if not self._skip_blanks_lines() :
+    def parseList(self, parent : Block, first_line : str, level : int) :
+
+        list_item_block = Block(tag='li')
+        self.parseLineSpans(list_item_block, first_line)
+        parent.append(list_item_block)
+
+        while True :
+
+            line = self.src.get_next()
+            if line is None or line.strip() == '' :
+                return
+
+            m = re.match(r'(\s*)(-|\#) ', line)
+            if m :
+                if len(m.group(1)) % 4 != 0:
+                    raise Exception("List indentation must be a multiple of 4 spaces")
+            else :
+                self.src.push_back(line)
+                return
+
+            tag = 'ul' if m.group(2) == '-' else 'ol'
+
+            new_level = len(m.group(1)) // 4
+            if new_level > level :
+                new_list = Block(tag=tag)
+                list_item_block.append(new_list)
+                self.parseList(new_list, line[len(m.group(0)) :], new_level)
+            elif new_level < level :
+                self.src.push_back(line)
+                return
+            else :
+                list_item_block = Block(tag='li')
+                self.parseLineSpans(list_item_block, line[len(m.group(0)) :])
+                parent.append(list_item_block)
+
+
+
+    def tryList(self, line : str) -> bool:
+
+        m = re.match(r'(\s*)(-|\#) ', line)
+        if m :
+            if len(m.group(1)) % 4 != 0:
+                raise Exception("List indentation must be a multiple of 4 spaces")
+        else :
             return False
 
-        line : str = self.src.get_next() # type: ignore
+        level = len(m.group(1)) // 4
 
-        # Other block types go here
+        tag = 'ul' if m.group(2) == '-' else 'ol'
 
+        block = Block(tag=tag)
+        self.parseList(block, line[len(m.group(0)) :], level)
+        self.doc.append(block)
+        return True
+
+    def tryTable(self, line : str) -> bool:
+        return False
+
+
+    def tryParagraph(self, line : str) -> bool:
         m = re.match(r'.p?{ ', line)
         if m :
             line = line[len(m.group(0)) : ]
@@ -140,6 +195,26 @@ class STMConverter(ParserProxy):
         self.parseSpans(block, line, explicit=explicit)
         self.doc.append(block)
         return True
+
+    def parseBlock(self) -> bool:
+        if not self._skip_blanks_lines() :
+            return False
+
+        line : str = self.src.get_next() # type: ignore
+
+        if self.tryList(line) :
+            return True
+
+        if self.tryTable(line) :
+            return True
+
+        # Paragraph must come last since it is the default
+        # if nothing else matches.
+        if self.tryParagraph(line) :
+            return True
+
+        return False
+
 
 
 
