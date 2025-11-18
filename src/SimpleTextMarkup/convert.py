@@ -16,7 +16,6 @@ def default_options() -> Dict[str, Option]:
 class STMConverter(ParserProxy):
     def __init__(self, src : LineSrc,  options : dict[str, str] | None = None, renderer : Renderer | None = None):
         self.stack : list[Context] = []
-        self.output = ''
         self.src = src
 
         if renderer is not None:
@@ -24,8 +23,6 @@ class STMConverter(ParserProxy):
         else :
             from .renderer.html_render import render
             self.renderer = render
-
-        self.doc = Document()
 
         self.options = default_options()
         if options is not None:
@@ -64,13 +61,9 @@ class STMConverter(ParserProxy):
     def _pop_context(self) -> Context:
         return self.stack.pop()
 
-    def _add_output(self, line : str):
-        if self._in_context():
-            self._inner_context().add_to_buffer(line)
-        else:
-            self.output += line
 
     def _skip_blanks_lines(self) -> bool:
+        """Returns true if a non-blank line is found."""
         while True :
             line = self.src.get_next()
             if line is None:
@@ -80,7 +73,11 @@ class STMConverter(ParserProxy):
             self.src.push_back(line)
             return True
 
-    def parseConfigs(self) -> bool:
+    ##############################################################
+    # CONFIG
+    ##############################################################
+    def parseConfig(self, parent : Container) -> bool:
+        """Parses one config line if found. Returns true if a config line was found."""
 
         if not self._skip_blanks_lines() :
             return False
@@ -104,10 +101,13 @@ class STMConverter(ParserProxy):
         parent.append(Span(line))
 
 
-    def parseSpans(self, parent : Block, first_line : str, explicit : bool) :
-        line : str | None = first_line
+    def parseParaContents(self, parent : Block, explicit : bool) :
+        print(f"parseParaContents({parent}, {explicit})")
+        line = self.src.get_next()
 
         while True :
+            print(f"parseParaContents: line: {line}")
+
             if line is None :
                 return
             if explicit and line.startswith('.}') :
@@ -117,7 +117,8 @@ class STMConverter(ParserProxy):
                 # throw away the line and return
                 return
 
-            self.parseLineSpans(parent, line)
+            if line.strip() != '' :
+                self.parseLineSpans(parent, line)
             line = self.src.get_next()
 
     def parseList(self, parent : Block, first_line : str, level : int) :
@@ -125,12 +126,15 @@ class STMConverter(ParserProxy):
         list_item_block = Block(tag='li')
         self.parseLineSpans(list_item_block, first_line)
         parent.append(list_item_block)
+        self.src.push_back(first_line)
+        self.tryParagraph(list_item_block)
 
         while True :
 
             line = self.src.get_next()
             if line is None or line.strip() == '' :
                 return
+
 
             m = re.match(r'(\s*)(-|\#) ', line)
             if m :
@@ -157,13 +161,18 @@ class STMConverter(ParserProxy):
 
 
 
-    def tryList(self, line : str) -> bool:
+    def tryList(self, parent : Container) -> bool:
+
+        line = self.src.get_next()
+        if line is None :
+            return False
 
         m = re.match(r'(\s*)(-|\#) ', line)
         if m :
             if len(m.group(1)) % 4 != 0:
                 raise Exception("List indentation must be a multiple of 4 spaces")
         else :
+            self.src.push_back(line)
             return False
 
         level = len(m.group(1)) // 4
@@ -172,70 +181,96 @@ class STMConverter(ParserProxy):
 
         block = Block(tag=tag)
         self.parseList(block, line[len(m.group(0)) :], level)
-        self.doc.append(block)
+        parent.append(block)
         return True
 
-    def tryTable(self, line : str) -> bool:
+    def tryTable(self, parent : Container) -> bool:
         return False
 
 
-    def tryParagraph(self, line : str) -> bool:
-        m = re.match(r'.p?{ ', line)
-        if m :
-            line = line[len(m.group(0)) : ]
-            line = line.lstrip()
-            if line.strip() == '':
-                line = self.src.get_next() # type: ignore
-            explicit = True
-        else :
-            line = line.lstrip()
-            explicit = False
+    def tryParagraph(self, parent : Container) -> bool:
+        line = self.src.get_next()
+        print(f"tryParagraph: Line: {line}")
+        if line is None :
+            return False
 
-        block = Block(tag='p')
-        self.parseSpans(block, line, explicit=explicit)
-        self.doc.append(block)
+        m = re.match(r'.(p?){ ', line)
+        if not m :
+            self.src.push_back(line)
+            return False
+
+        line = line[len(m.group(0)) : ]
+        while line.strip() == '':
+            line = self.src.get_next() # type: ignore
+            if line is None :
+                raise Exception("Unexpected end of input - unterminated paragraph")
+
+
+        block = Paragraph(True)
+        print(f"tryParagraph: pushing back: {line}")
+        self.src.push_back(line)
+        self.parseParaContents(block, explicit=True)
+        parent.append(block)
         return True
 
-    def parseBlock(self) -> bool:
+    def parseImpliedParagraph(self, parent : Container) -> bool:
+        block = Block(tag='p')
+        self.parseParaContents(block, explicit=False)
+        parent.append(block)
+        return True
+
+    ##############################################################
+    # BLOCK
+    ##############################################################
+    def parseOneBlock(self, parent : Container) -> bool:
+        """Attempts to parse one block and returns true if it succeeds.
+        Only blocks allowed at the document level are checked."""
         if not self._skip_blanks_lines() :
             return False
 
-        line : str = self.src.get_next() # type: ignore
-
-        if self.tryList(line) :
+        if self.tryList(parent) :
             return True
 
-        if self.tryTable(line) :
+        if self.tryTable(parent) :
             return True
 
         # Paragraph must come last since it is the default
         # if nothing else matches.
-        if self.tryParagraph(line) :
+        if self.tryParagraph(parent) :
+            return True
+
+        if self.parseImpliedParagraph(parent) :
             return True
 
         return False
 
 
+    def parseDocument(self) -> Document:
 
+        document = Document()
+        while not self.src.is_at_end():
+            while self.parseConfig(document) :
+                pass
+
+            self.parseOneBlock(document)
+
+        return document
 
     def parse(self) -> Document:
 
         if self.src is None:
             raise Exception("No input")
 
-        while not self.src.is_at_end():
-            while self.parseConfigs() :
-                pass
+        document = self.parseDocument()
 
-            self.parseBlock()
 
         import json
         print('--- START ----')
-        print(json.dumps(self.doc.json(), indent=2))
+        print(json.dumps(document.json(), indent=2))
         print('--- END ------')
 
-        return self.doc
+        return document
 
     def convert(self) -> str:
-        self.parse()
-        return self.renderer(self.doc)
+        document = self.parse()
+        return self.renderer(document)

@@ -4,12 +4,17 @@ from typing import Dict, List
 class Node :
     ntype : str = 'Node'
 
+    def __init__(self, tag : str = '') -> None:
+        self.tag = tag
+
+
     def json(self) -> Dict[str, str] :
-        return { 'ntype' : self.ntype }
+        return { 'ntype' : self.ntype, 'tag' : self.tag }
 
 class Span(Node) :
     ntype = 'span'
-    def __init__(self, text : str) -> None:
+    def __init__(self, text : str, tag : str = '') -> None:
+        super().__init__(tag=tag)
         self.text = text
 
     def json(self) :
@@ -19,6 +24,7 @@ class Container(Node) :
     ntype = 'container'
 
     def __init__(self) -> None:
+        super().__init__(tag='')
         self.children : List[Node] = []
 
     def append(self, child : Node) :
@@ -32,17 +38,22 @@ class Container(Node) :
 class Block(Container) :
     ntype = 'block'
 
-    def __init__(self, tag : str) -> None:
+    def __init__(self, tag : str = '') -> None:
         super().__init__()
         self.tag = tag
 
+
+class Paragraph(Block) :
+
+    def __init__(self, use_wrapper : bool) -> None:
+        self.use_wrapper = use_wrapper
+        tag = 'p' if use_wrapper else ''
+        super().__init__(tag=tag)
+
     def json(self) :
         return {  **(super().json()),
-                'tag' : self.tag,
+                'use_wrapper' : self.use_wrapper,
                 }
 
 class Document(Container) :
     ntype = 'document'
-
-    def __init__(self):
-        self.children : List[Block] = []

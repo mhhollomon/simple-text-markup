@@ -11,9 +11,10 @@ __all__ = [
     'ParserProxy',
     'Context',
     'LineSrc',
-    'OptionSource',
-    'Option',
-    'BooleanOption',
-    'StringOption',
-    'Block', 'Span', 'Document'
+    # Options
+    'OptionSource', 'Option',
+    'BooleanOption', 'StringOption',
+    # AST
+    'Block', 'Span', 'Document', 'Paragraph',
+    'Container'
 ]

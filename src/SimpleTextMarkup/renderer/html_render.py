@@ -1,5 +1,4 @@
-from .type import Renderer
-from SimpleTextMarkup.impl_.ast import Document, Block
+from SimpleTextMarkup.impl_.ast import Document, Block, Paragraph
 
 def renderBlock(block : Block) :
     output = ''
