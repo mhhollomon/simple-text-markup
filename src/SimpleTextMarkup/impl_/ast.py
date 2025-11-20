@@ -11,6 +11,9 @@ class Node :
     def json(self) -> Dict[str, str] :
         return { 'ntype' : self.ntype, 'tag' : self.tag }
 
+    def __str__(self) -> str:
+        return f"Block({self.ntype}, '{self.tag}')"
+
 class Span(Node) :
     ntype = 'span'
     def __init__(self, text : str, tag : str = '') -> None:

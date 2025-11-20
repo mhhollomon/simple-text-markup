@@ -28,10 +28,9 @@ def test_return_to_outer_list() :
     assert stm.stm_convert("- item 1\n    # item 2\n- item 3") == \
       "<ul><li>item 1<ol><li>item 2</li></ol></li><li>item 3</li></ul>"
 
-@pytest.mark.skip
 def test_unwrapped_paragraph_in_list() :
     assert stm.stm_convert("- .{ paragraph\n    .}") == "<ul><li>paragraph</li></ul>"
-    assert stm.stm_convert("- .{\nparagraph\n    .}") == "<ul><li>paragraph</li></ul>"
+    assert stm.stm_convert("- .{\n    paragraph\n    .}") == "<ul><li>paragraph</li></ul>"
 
 @pytest.mark.skip
 def test_wrapped_paragraph_in_list() :

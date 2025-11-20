@@ -98,7 +98,7 @@ class STMConverter(ParserProxy):
         return True
 
     def parseLineSpans(self, parent : Block, line : str) :
-        parent.append(Span(line))
+        parent.append(Span(line.strip()))
 
 
     def parseParaContents(self, parent : Block, explicit : bool) :
@@ -106,57 +106,99 @@ class STMConverter(ParserProxy):
         line = self.src.get_next()
 
         while True :
-            print(f"parseParaContents: line: {line}")
+            print(f"parseParaContents: considering line: {line}")
 
             if line is None :
-                return
-            if explicit and line.startswith('.}') :
+                if explicit:
+                    raise Exception("Unexpected end of input - unterminated paragraph")
+                else :
+                    return
+            if explicit and re.match(r'\s*\.\}', line) :
+                print(f"parseParaContents: found explicit end")
                 # throw away the line and return
                 return
             if not explicit and line.strip() == '' :
+                print(f"parseParaContents: found implicit end")
                 # throw away the line and return
                 return
 
             if line.strip() != '' :
+                print(f"parseParaContents: found span line: {line}")
                 self.parseLineSpans(parent, line)
             line = self.src.get_next()
 
+    def tryBlockContext(self, parent : Container) -> bool:
+        print(f"tryBlockContext({parent})")
+        line = self.src.get_next()
+        print(f"tryBlockContext: Line: {line}")
+        if line is None :
+            return False
+
+        m = re.match(r'\.{(\s|$)', line)
+        if not m :
+            self.src.push_back(line)
+            return False
+
+        line = line[len(m.group(0)) : ]
+        while line.strip() == '':
+            line = self.src.get_next() # type: ignore
+            if line is None :
+                raise Exception("Unexpected end of input - unterminated block context")
+
+
+        block = Block(tag='')
+        print(f"tryBlockContext: pushing back: {line}")
+        self.src.push_back(line)
+        self.parseParaContents(block, explicit=True)
+        parent.append(block)
+        return True
+
     def parseList(self, parent : Block, first_line : str, level : int) :
+        print(f"parseList({parent}, {first_line}, {level})")
 
         list_item_block = Block(tag='li')
-        self.parseLineSpans(list_item_block, first_line)
-        parent.append(list_item_block)
         self.src.push_back(first_line)
-        self.tryParagraph(list_item_block)
+        if self.tryBlockContext(list_item_block) :
+            pass
+        else :
+            first_line = self.src.get_next() # type: ignore
+            self.parseLineSpans(list_item_block, first_line)
+        parent.append(list_item_block)
 
         while True :
 
-            line = self.src.get_next()
-            if line is None or line.strip() == '' :
+            orig_line = self.src.get_next()
+            if orig_line is None or orig_line.strip() == '' :
                 return
 
 
-            m = re.match(r'(\s*)(-|\#) ', line)
+            m = re.match(r'(\s*)(-|\#) ', orig_line)
             if m :
                 if len(m.group(1)) % 4 != 0:
                     raise Exception("List indentation must be a multiple of 4 spaces")
             else :
-                self.src.push_back(line)
+                self.src.push_back(orig_line)
                 return
 
             tag = 'ul' if m.group(2) == '-' else 'ol'
 
             new_level = len(m.group(1)) // 4
+            small_line = orig_line[len(m.group(0)) : ]
             if new_level > level :
                 new_list = Block(tag=tag)
                 list_item_block.append(new_list)
-                self.parseList(new_list, line[len(m.group(0)) :], new_level)
+                self.parseList(new_list, small_line, new_level)
             elif new_level < level :
-                self.src.push_back(line)
+                self.src.push_back(orig_line)
                 return
             else :
                 list_item_block = Block(tag='li')
-                self.parseLineSpans(list_item_block, line[len(m.group(0)) :])
+                self.src.push_back(small_line)
+                if self.tryBlockContext(list_item_block) :
+                    pass
+                else :
+                    small_line = self.src.get_next()
+                    self.parseLineSpans(list_item_block, small_line) # type: ignore
                 parent.append(list_item_block)
 
 
@@ -164,6 +206,8 @@ class STMConverter(ParserProxy):
     def tryList(self, parent : Container) -> bool:
 
         line = self.src.get_next()
+        print(f"tryList: Line: {line}")
+
         if line is None :
             return False
 
@@ -194,7 +238,7 @@ class STMConverter(ParserProxy):
         if line is None :
             return False
 
-        m = re.match(r'.(p?){ ', line)
+        m = re.match(r'\.(p?){ ', line)
         if not m :
             self.src.push_back(line)
             return False
