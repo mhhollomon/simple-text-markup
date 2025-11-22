@@ -24,7 +24,12 @@ This must be two comma separated integers.
     - sub-bullet
         - sub-sub-bullet
     - levels are indented by 4 spaces (no tabs)
-
+- .{ You can have more complicated things by opening a
+    block context. This text will not be wrapped in a p-tag.
+    .p{ actual paragraph will have the p-tag
+    .}
+.}
+- .p{ Or how about a single paragraph as the child. .}
 Either a blank line or a line without a `dash` to end the list.
 
 More complicated list.
@@ -113,5 +118,5 @@ tie the footnote marker with the text.
     .l{a link here|https://example.com/url}
 .}
 
-#{This actual renders the footnote text}
+#{This actually renders the footnote text}
 .footnotes{}
